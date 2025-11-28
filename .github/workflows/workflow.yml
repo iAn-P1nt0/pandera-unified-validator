@@ -1,0 +1,134 @@
+name: Extended Validation Suite
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/workflow.yml"
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: extended-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_CACHE_DIR: ~/.cache/pip
+
+jobs:
+  extended-tests:
+    name: ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: Streaming Validator Suite
+            command: pytest tests/test_core/test_streaming.py -v
+          - name: Hypothesis Property Suite
+            command: pytest tests/test_core/test_hypothesis.py -v
+          - name: Benchmark Regression Suite
+            command: pytest tests/test_core/test_benchmarks.py -v --benchmark-max-time=0.2 --benchmark-save=ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: ${{ runner.os }}-ext-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-ext-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,all]"
+
+      - name: Run ${{ matrix.target.name }}
+        run: ${{ matrix.target.command }}
+
+      - name: Upload benchmark artifacts
+        if: matrix.target.name == 'Benchmark Regression Suite'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-benchmark-data
+          path: ./.benchmarks
+          if-no-files-found: ignore
+
+  package-integrity:
+    name: Package Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: ${{ runner.os }}-pkg-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pkg-
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Validate distributions
+        run: twine check dist/*
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+
+  cli-smoke:
+    name: CLI & Examples Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: ${{ runner.os }}-cli-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cli-
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all]"
+
+      - name: Run CLI help
+        run: |
+          data-guardian --help
+          python -m data_guardian --help
+
+      - name: Run reporting demo
+        run: python examples/reporting_demo.py
