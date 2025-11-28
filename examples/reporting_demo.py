@@ -1,9 +1,9 @@
-"""Demonstration of data-guardian validation reporting features."""
+"""Demonstration of pandera-unified-validator reporting features."""
 
 import pandas as pd
 from pathlib import Path
 
-from data_guardian import (
+from pandera_unified_validator import (
     SchemaBuilder,
     UnifiedValidator,
     ValidationReporter,
@@ -18,7 +18,7 @@ EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 def demo_validation_reporting():
     """Demonstrate validation reporting with various output formats."""
     print("=" * 80)
-    print("Data Guardian - Validation Reporting Demo")
+    print("pandera-unified-validator - Validation Reporting Demo")
     print("=" * 80)
     print()
 
@@ -89,7 +89,7 @@ def demo_validation_reporting():
     print("-" * 80)
 
     # Simulate streaming validation metrics
-    from data_guardian.core.streaming import ValidationMetrics
+    from pandera_unified_validator.core.streaming import ValidationMetrics
 
     metrics = ValidationMetrics()
     metrics.update(900, 100, ["Error 1", "Error 2", "Error 1"])
