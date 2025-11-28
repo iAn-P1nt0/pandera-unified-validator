@@ -23,6 +23,14 @@ from .core.validator import (
 )
 from .backends.pandas_backend import PandasBackend
 from .backends.polars_backend import PolarsBackend
+from .profiling import (
+    ComparisonReport,
+    DataProfiler,
+    HistogramSummary,
+    ProfileReport,
+    QualityScore,
+    infer_constraints_from_profile,
+)
 
 __all__ = [
     "AutoFixSuggestion",
@@ -30,6 +38,10 @@ __all__ = [
     "DataGuardianValidator",
     "PandasBackend",
     "PolarsBackend",
+    "ComparisonReport",
+    "DataProfiler",
+    "HistogramSummary",
+    "ProfileReport",
     "SchemaBuilder",
     "SchemaConverter",
     "StreamingResult",
@@ -40,6 +52,8 @@ __all__ = [
     "ValidationSchema",
     "ValidationErrorDetail",
     "ValidationResult",
+    "QualityScore",
+    "infer_constraints_from_profile",
     "validate_csv_streaming",
     "validate_csv_streaming_sync",
 ]

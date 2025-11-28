@@ -52,9 +52,15 @@ parquet = [
 database = [
   "sqlalchemy>=2.0",
 ]
+profiling = [
+  "ydata-profiling>=4.6",
+  "sweetviz>=2.3.1",
+]
 all = [
   "pyarrow>=14.0",
   "sqlalchemy>=2.0",
+  "ydata-profiling>=4.6",
+  "sweetviz>=2.3.1",
 ]
 
 [tool.hatch.envs.default]
