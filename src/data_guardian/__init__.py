@@ -1,6 +1,12 @@
 """Public interface for the data_guardian package."""
 
-from .core.schema import ValidationSchema
+from .core.schema import (
+    ColumnSpec,
+    SchemaBuilder,
+    SchemaConverter,
+    UnifiedSchema,
+    ValidationSchema,
+)
 from .core.validator import (
     AutoFixSuggestion,
     DataGuardianValidator,
@@ -13,9 +19,13 @@ from .backends.polars_backend import PolarsBackend
 
 __all__ = [
     "AutoFixSuggestion",
+    "ColumnSpec",
     "DataGuardianValidator",
     "PandasBackend",
     "PolarsBackend",
+    "SchemaBuilder",
+    "SchemaConverter",
+    "UnifiedSchema",
     "UnifiedValidator",
     "ValidationSchema",
     "ValidationErrorDetail",

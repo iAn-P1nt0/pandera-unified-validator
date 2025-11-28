@@ -292,6 +292,11 @@ class UnifiedValidator(Generic[SchemaT]):
             column_value = error.context.get("column")
             if isinstance(column_value, str):
                 return column_value
+        lines = [line.strip() for line in error.message.splitlines() if line.strip()]
+        if len(lines) >= 2:
+            field_token = lines[1]
+            if field_token and " " not in field_token:
+                return field_token.strip("'\"")
         match = re.search(r"['\"](?P<col>[A-Za-z0-9_]+)['\"]", error.message)
         if match:
             return match.group("col")

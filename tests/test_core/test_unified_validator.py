@@ -65,7 +65,7 @@ def test_unified_validator_streaming_chunks() -> None:
 
 
 def test_unified_validator_auto_fix_suggestions() -> None:
-    validator = UnifiedValidator(Person, auto_fix=True)
+    validator = UnifiedValidator(Person, auto_fix=True, lazy=True)
     df = pd.DataFrame({"identifier": [1, 2]})
 
     result = validator.validate(df)

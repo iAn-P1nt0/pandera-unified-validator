@@ -1,6 +1,12 @@
 """Core validation primitives for data_guardian."""
 
-from .schema import ValidationSchema
+from .schema import (
+    ColumnSpec,
+    SchemaBuilder,
+    SchemaConverter,
+    UnifiedSchema,
+    ValidationSchema,
+)
 from .validator import (
     AutoFixSuggestion,
     Backend,
@@ -14,7 +20,11 @@ from .validator import (
 __all__ = [
     "AutoFixSuggestion",
     "Backend",
+    "ColumnSpec",
     "DataGuardianValidator",
+    "SchemaBuilder",
+    "SchemaConverter",
+    "UnifiedSchema",
     "UnifiedValidator",
     "ValidationBackend",
     "ValidationSchema",
