@@ -7,6 +7,13 @@ from .core.schema import (
     UnifiedSchema,
     ValidationSchema,
 )
+from .core.streaming import (
+    StreamingResult,
+    StreamingValidator,
+    ValidationMetrics,
+    validate_csv_streaming,
+    validate_csv_streaming_sync,
+)
 from .core.validator import (
     AutoFixSuggestion,
     DataGuardianValidator,
@@ -25,11 +32,16 @@ __all__ = [
     "PolarsBackend",
     "SchemaBuilder",
     "SchemaConverter",
+    "StreamingResult",
+    "StreamingValidator",
     "UnifiedSchema",
     "UnifiedValidator",
+    "ValidationMetrics",
     "ValidationSchema",
     "ValidationErrorDetail",
     "ValidationResult",
+    "validate_csv_streaming",
+    "validate_csv_streaming_sync",
 ]
 
 __version__ = "0.1.0"

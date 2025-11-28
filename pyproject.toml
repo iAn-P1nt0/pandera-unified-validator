@@ -40,10 +40,21 @@ Documentation = "https://github.com/ianpinto/data-guardian/tree/main/docs"
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4",
+  "pytest-asyncio>=0.21",
   "mypy>=1.7",
   "ruff>=0.1.6",
   "black>=23.11",
   "coverage[toml]>=7.3",
+]
+parquet = [
+  "pyarrow>=14.0",
+]
+database = [
+  "sqlalchemy>=2.0",
+]
+all = [
+  "pyarrow>=14.0",
+  "sqlalchemy>=2.0",
 ]
 
 [tool.hatch.envs.default]

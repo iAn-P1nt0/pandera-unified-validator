@@ -7,6 +7,13 @@ from .schema import (
     UnifiedSchema,
     ValidationSchema,
 )
+from .streaming import (
+    StreamingResult,
+    StreamingValidator,
+    ValidationMetrics,
+    validate_csv_streaming,
+    validate_csv_streaming_sync,
+)
 from .validator import (
     AutoFixSuggestion,
     Backend,
@@ -24,10 +31,15 @@ __all__ = [
     "DataGuardianValidator",
     "SchemaBuilder",
     "SchemaConverter",
+    "StreamingResult",
+    "StreamingValidator",
     "UnifiedSchema",
     "UnifiedValidator",
     "ValidationBackend",
+    "ValidationMetrics",
     "ValidationSchema",
     "ValidationErrorDetail",
     "ValidationResult",
+    "validate_csv_streaming",
+    "validate_csv_streaming_sync",
 ]
