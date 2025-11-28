@@ -29,11 +29,11 @@ valid_bool = st.booleans()
 
 @given(
     data_frames([
-        column("id", elements=valid_id),
-        column("name", elements=valid_name),
-        column("score", elements=valid_score),
-        column("active", elements=valid_bool),
-    ], index=st.range_indexes(min_size=1, max_size=100))
+        column("id", elements=valid_id, dtype=int),
+        column("name", elements=valid_name, dtype=str),
+        column("score", elements=valid_score, dtype=float),
+        column("active", elements=valid_bool, dtype=bool),
+    ])
 )
 @settings(max_examples=50, deadline=2000)
 def test_validator_with_valid_random_data(df: pd.DataFrame) -> None:
@@ -165,8 +165,8 @@ def test_unique_constraint_detection(ids: list[int]) -> None:
             max_value=1e10,
             allow_nan=True,
             allow_infinity=True,
-        )),
-    ], index=st.range_indexes(min_size=1, max_size=50))
+        ), dtype=float),
+    ])
 )
 @settings(max_examples=50)
 def test_nullable_column_handling(df: pd.DataFrame) -> None:
