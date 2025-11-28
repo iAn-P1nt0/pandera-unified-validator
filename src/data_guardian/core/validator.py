@@ -1,0 +1,360 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from itertools import islice
+import re
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Iterator,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Type,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
+
+from pandera import DataFrameModel
+import pandas as pd
+import polars as pl
+from pydantic import BaseModel
+from rich.console import Console
+from rich.table import Table
+
+from .schema import ValidationSchema
+from ..utils.reporting import ValidationReport
+
+FrameT = TypeVar("FrameT")
+SchemaT = TypeVar("SchemaT", Type[BaseModel], Type[DataFrameModel], ValidationSchema)
+DataLike = Union[pd.DataFrame, pl.DataFrame, Mapping[str, Any], Sequence[Mapping[str, Any]]]
+FixCallable = Callable[[pd.DataFrame], pd.DataFrame]
+
+
+@dataclass(frozen=True)
+class ValidationErrorDetail:
+    """Structured error detail with localization info."""
+
+    message: str
+    row: int | None = None
+    column: str | None = None
+    context: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class AutoFixSuggestion:
+    """Represents a possible automatic remediation for an error."""
+
+    description: str
+    column: str | None = None
+    fixer: FixCallable | None = None
+
+    def apply(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if self.fixer is None:
+            return frame
+        return self.fixer(frame)
+
+
+@dataclass
+class ValidationResult:
+    """Validation outcome returned by UnifiedValidator."""
+
+    is_valid: bool
+    errors: list[ValidationErrorDetail] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    suggestions: list[AutoFixSuggestion] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def raise_for_errors(self) -> None:
+        if not self.is_valid:
+            raise ValidationFailedError(self)
+
+
+class ValidationException(Exception):
+    """Base error for validation failures."""
+
+
+class BackendNotAvailableError(ValidationException):
+    """Raised when no backend can handle the provided payload."""
+
+
+class ValidationFailedError(ValidationException):
+    """Raised when validation fails in eager mode."""
+
+    def __init__(self, result: ValidationResult):
+        super().__init__("Validation failed")
+        self.result = result
+
+
+@runtime_checkable
+class Backend(Protocol):
+    """Protocol for UnifiedValidator backends."""
+
+    name: str
+
+    def supports(self, data: object) -> bool:
+        ...
+
+    def normalize(self, data: object) -> pd.DataFrame | pl.DataFrame:
+        ...
+
+    def validate(self, frame: pd.DataFrame | pl.DataFrame, schema: ValidationSchema, *, lazy: bool) -> ValidationReport:
+        ...
+
+
+class PandasValidationBackend(Backend):
+    name = "pandas"
+
+    def supports(self, data: object) -> bool:
+        return isinstance(data, pd.DataFrame)
+
+    def normalize(self, data: object) -> pd.DataFrame:
+        if isinstance(data, pd.DataFrame):
+            return data
+        if isinstance(data, Mapping):
+            return pd.DataFrame([data])
+        if isinstance(data, Sequence):
+            rows = [row for row in data if isinstance(row, Mapping)]
+            if not rows and hasattr(data, "__len__") and len(data) == 0:  # type: ignore[arg-type]
+                return pd.DataFrame()
+            if rows:
+                return pd.DataFrame(rows)
+        raise TypeError("Unsupported data payload for pandas backend")
+
+    def validate(self, frame: pd.DataFrame, schema: ValidationSchema, *, lazy: bool) -> ValidationReport:
+        report = schema.validate_dataframe(frame)
+        if schema.record_model is not None:
+            record_report = schema.validate_records(frame.to_dict(orient="records"))
+            report = report.merge(record_report)
+        return report.with_metadata(backend=self.name, rows=len(frame))
+
+
+class PolarsValidationBackend(Backend):
+    name = "polars"
+
+    def supports(self, data: object) -> bool:
+        return isinstance(data, pl.DataFrame)
+
+    def normalize(self, data: object) -> pl.DataFrame:
+        if isinstance(data, pl.DataFrame):
+            return data
+        raise TypeError("Polars backend only accepts polars.DataFrame inputs")
+
+    def validate(self, frame: pl.DataFrame, schema: ValidationSchema, *, lazy: bool) -> ValidationReport:
+        report = schema.validate_polars(frame)
+        if schema.record_model is not None:
+            record_report = schema.validate_records(frame.to_dicts())
+            report = report.merge(record_report)
+        return report.with_metadata(backend=self.name, rows=frame.height)
+
+
+class UnifiedValidator(Generic[SchemaT]):
+    """High-level validator capable of handling multiple schema types and payloads."""
+
+    def __init__(
+        self,
+        schema: SchemaT,
+        *,
+        lazy: bool = False,
+        auto_fix: bool = False,
+        backend: str | None = "pandas",
+        console: Console | None = None,
+    ) -> None:
+        self._schema = self._coerce_schema(schema)
+        self.lazy = lazy
+        self.auto_fix = auto_fix
+        self.default_backend = backend
+        self._console = console
+        self._backends: Dict[str, Backend] = {}
+        self.register_backend(PandasValidationBackend())
+        self.register_backend(PolarsValidationBackend())
+
+    def register_backend(self, backend: Backend, *, override: bool = False) -> None:
+        if not override and backend.name in self._backends:
+            raise ValueError(f"Backend '{backend.name}' already registered for UnifiedValidator")
+        self._backends[backend.name] = backend
+
+    def validate(
+        self,
+        data: DataLike | pl.DataFrame,
+        *,
+        backend: str | None = None,
+        console: Console | None = None,
+    ) -> ValidationResult:
+        prepared = self._prepare_payload(data)
+        backend_impl = self._resolve_backend(prepared, backend)
+        normalized = backend_impl.normalize(prepared)
+        report = backend_impl.validate(normalized, self._schema, lazy=self.lazy)
+        result = self._result_from_report(report)
+        if self.auto_fix:
+            result.suggestions.extend(self._suggest_fixes(result))
+
+        display_console = console or self._console
+        if display_console is not None:
+            self._render_console(display_console, result)
+
+        if not result.is_valid and not self.lazy:
+            raise ValidationFailedError(result)
+
+        return result
+
+    def validate_streaming(
+        self,
+        data_stream: Iterator[Mapping[str, Any]],
+        *,
+        chunk_size: int = 1000,
+    ) -> Iterator[ValidationResult]:
+        while True:
+            chunk = list(islice(data_stream, chunk_size))
+            if not chunk:
+                break
+            yield self.validate(chunk)
+
+    def apply_fixes(self, data: pd.DataFrame, result: ValidationResult) -> pd.DataFrame:
+        frame = data.copy()
+        for suggestion in result.suggestions:
+            frame = suggestion.apply(frame)
+        return frame
+
+    def _coerce_schema(self, schema: SchemaT) -> ValidationSchema:
+        if isinstance(schema, ValidationSchema):
+            return schema
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            return ValidationSchema(name=schema.__name__, record_model=schema)
+        if isinstance(schema, type) and issubclass(schema, DataFrameModel):
+            materialized = schema.to_schema()
+            return ValidationSchema(name=schema.__name__, dataframe_schema=materialized)
+        raise TypeError("Unsupported schema type provided to UnifiedValidator")
+
+    def _prepare_payload(self, data: DataLike | pl.DataFrame) -> object:
+        if isinstance(data, (pd.DataFrame, pl.DataFrame)):
+            return data
+        if isinstance(data, Mapping):
+            return pd.DataFrame([data])
+        if isinstance(data, Sequence) and all(isinstance(row, Mapping) for row in data):
+            return pd.DataFrame(list(data))
+        raise TypeError("Unsupported data payload provided to validate()
+")
+
+    def _resolve_backend(self, data: object, name: str | None) -> Backend:
+        if name is not None:
+            try:
+                return self._backends[name]
+            except KeyError as exc:
+                raise BackendNotAvailableError(f"Backend '{name}' is not registered") from exc
+
+        for backend in self._backends.values():
+            if backend.supports(data):
+                return backend
+
+        raise BackendNotAvailableError(
+            "No compatible backend found. Registered backends: " + ", ".join(self._backends.keys())
+        )
+
+    def _result_from_report(self, report: ValidationReport) -> ValidationResult:
+        errors = [ValidationErrorDetail(message=message, context=dict(report.metadata)) for message in report.errors]
+        warnings = list(report.warnings)
+        metadata = dict(report.metadata)
+        return ValidationResult(report.is_valid, errors, warnings, [], metadata)
+
+    def _suggest_fixes(self, result: ValidationResult) -> list[AutoFixSuggestion]:
+        suggestions: list[AutoFixSuggestion] = []
+        for error in result.errors:
+            column = error.context.get("column") if isinstance(error.context, Mapping) else None
+            lowered = error.message.lower()
+            if "missing" in lowered and "column" in lowered and column:
+                suggestions.append(
+                    AutoFixSuggestion(
+                        description=f"Add missing column '{column}' with null values",
+                        column=column,
+                        fixer=lambda frame, col=column: frame.assign(**{col: pd.NA}),
+                    )
+                )
+            elif "type" in lowered and column:
+                suggestions.append(
+                    AutoFixSuggestion(
+                        description=f"Coerce column '{column}' to the expected dtype",
+                        column=column,
+                        fixer=lambda frame, col=column: frame.assign(**{col: pd.to_numeric(frame[col], errors="coerce")}),
+                    )
+                )
+        return suggestions
+
+    def _render_console(self, console: Console, result: ValidationResult) -> None:
+        table = Table(title="Validation Result", expand=True)
+        table.add_column("Type")
+        table.add_column("Message")
+        if result.is_valid:
+            table.add_row("status", "Validation passed")
+        else:
+            table.add_row("status", "Validation failed")
+        for error in result.errors:
+            location = ""
+            if error.column is not None:
+                location += f"column={error.column} "
+            if error.row is not None:
+                location += f"row={error.row}"
+            table.add_row("error", f"{error.message} {location}".strip())
+        for warning in result.warnings:
+            table.add_row("warning", warning)
+        for suggestion in result.suggestions:
+            table.add_row("suggestion", suggestion.description)
+        console.print(table)
+
+
+@runtime_checkable
+class ValidationBackend(Protocol[FrameT]):
+    """Legacy protocol implemented by concrete dataframe backends."""
+
+    name: str
+
+    def supports(self, data: object) -> bool:
+        """Return True when the backend can handle the provided data container."""
+
+    def validate(self, data: FrameT, schema: ValidationSchema) -> ValidationReport:
+        """Validate ``data`` using ``schema`` and return a structured report."""
+
+
+class DataGuardianValidator:
+    """Historical validator retained for backwards compatibility."""
+
+    def __init__(self) -> None:
+        self._backends: Dict[str, ValidationBackend[Any]] = {}
+
+    def register_backend(self, backend: ValidationBackend[Any], *, override: bool = False) -> None:
+        if not override and backend.name in self._backends:
+            raise ValueError(f"Backend '{backend.name}' already registered")
+        self._backends[backend.name] = backend
+
+    def available_backends(self) -> tuple[str, ...]:
+        return tuple(self._backends.keys())
+
+    def validate(
+        self,
+        data: object,
+        schema: ValidationSchema,
+        *,
+        backend: Optional[str] = None,
+    ) -> ValidationReport:
+        selected = self._resolve_backend(data, backend)
+        return selected.validate(data, schema)
+
+    def _resolve_backend(self, data: object, name: Optional[str]) -> ValidationBackend[Any]:
+        if name is not None:
+            try:
+                return self._backends[name]
+            except KeyError as exc:
+                raise ValueError(f"Backend '{name}' is not registered") from exc
+
+        for candidate in self._backends.values():
+            if candidate.supports(data):
+                return candidate
+
+        raise ValueError(
+            "No compatible backend found. Registered backends: " + ", ".join(self.available_backends())
+        )
+

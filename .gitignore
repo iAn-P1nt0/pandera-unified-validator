@@ -1,0 +1,63 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+wheelhouse/
+.eggs/
+.eggs-info/
+*.egg
+*.egg-info/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.noseids
+.coverage
+.coverage.*
+.cache
+pytest.debug.log
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+.env
+.env.*
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Type checker caches
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Ruff
+.ruff_cache/
+
+# Hatch
+.hatch/
+
+# Data files
+*.csv
+*.parquet
+*.feather
+
+# OS files
+.DS_Store
+Thumbs.db
