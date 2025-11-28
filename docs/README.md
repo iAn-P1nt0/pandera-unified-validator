@@ -4,7 +4,9 @@
 
 1. **Core** – `ValidationSchema` models combine Pydantic record checks with Pandera dataframe
    schemas. `DataGuardianValidator` orchestrates backend selection based on the incoming frame
-   type and composes the resulting `ValidationReport` objects.
+   type and composes the resulting `ValidationReport` objects. The higher-level
+   `UnifiedValidator` adds typed `ValidationResult` containers, streaming helpers, auto-fix
+   suggestions, and pretty console rendering via `rich` for developer ergonomics.
 2. **Backends** – `PandasBackend` and `PolarsBackend` implement the `ValidationBackend`
    protocol. Backends are responsible for (a) asserting they can handle the supplied data
    structure and (b) translating the core schema contracts into engine-specific execution.

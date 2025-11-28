@@ -65,6 +65,35 @@ print(report.is_valid)  # True
 print(report.metadata)
 ```
 
+## UnifiedValidator
+
+For richer workflows (streaming data, JSON payloads, or auto-fix suggestions) use
+`UnifiedValidator`:
+
+```python
+from rich.console import Console
+from data_guardian import UnifiedValidator
+
+rich_console = Console()
+unified = UnifiedValidator(Order, auto_fix=True, console=rich_console)
+
+result = unified.validate([
+    {"order_id": 1, "amount": 9.99, "currency": "USD"},
+    {"order_id": "2", "amount": -1, "currency": "GBP"},
+])
+
+if not result.is_valid:
+    # apply automatic fixes before retrying
+    fixed = unified.apply_fixes(pd.DataFrame([
+        {"order_id": 1, "amount": 9.99, "currency": "USD"},
+        {"order_id": "2", "amount": -1, "currency": "GBP"},
+    ]), result)
+```
+
+`UnifiedValidator` automatically picks the pandas or Polars backend, supports lazy/driven
+validation, yields streaming chunk reports, and produces structured `ValidationResult`
+objects for downstream observability.
+
 ## Development
 
 - Lint: `hatch run lint`

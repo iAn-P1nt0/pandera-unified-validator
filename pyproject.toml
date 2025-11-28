@@ -17,6 +17,7 @@ dependencies = [
   "pandera>=0.18",
   "pandas>=2.0",
   "polars>=0.20",
+  "rich>=13.0",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",

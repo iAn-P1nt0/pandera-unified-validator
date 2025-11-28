@@ -180,13 +180,14 @@ class UnifiedValidator(Generic[SchemaT]):
 
     def validate(
         self,
-        data: DataLike | pl.DataFrame,
+        data: DataLike,
         *,
         backend: str | None = None,
         console: Console | None = None,
     ) -> ValidationResult:
         prepared = self._prepare_payload(data)
-        backend_impl = self._resolve_backend(prepared, backend)
+        backend_name = backend or self.default_backend
+        backend_impl = self._resolve_backend(prepared, backend_name)
         normalized = backend_impl.normalize(prepared)
         report = backend_impl.validate(normalized, self._schema, lazy=self.lazy)
         result = self._result_from_report(report)
@@ -237,8 +238,7 @@ class UnifiedValidator(Generic[SchemaT]):
             return pd.DataFrame([data])
         if isinstance(data, Sequence) and all(isinstance(row, Mapping) for row in data):
             return pd.DataFrame(list(data))
-        raise TypeError("Unsupported data payload provided to validate()
-")
+        raise TypeError("Unsupported data payload provided to validate()")
 
     def _resolve_backend(self, data: object, name: str | None) -> Backend:
         if name is not None:
@@ -264,14 +264,15 @@ class UnifiedValidator(Generic[SchemaT]):
     def _suggest_fixes(self, result: ValidationResult) -> list[AutoFixSuggestion]:
         suggestions: list[AutoFixSuggestion] = []
         for error in result.errors:
-            column = error.context.get("column") if isinstance(error.context, Mapping) else None
+            column = self._infer_column(error)
             lowered = error.message.lower()
-            if "missing" in lowered and "column" in lowered and column:
+            missing_column_issue = ("missing" in lowered and "column" in lowered) or "field required" in lowered
+            if missing_column_issue and column:
                 suggestions.append(
                     AutoFixSuggestion(
                         description=f"Add missing column '{column}' with null values",
                         column=column,
-                        fixer=lambda frame, col=column: frame.assign(**{col: pd.NA}),
+                        fixer=self._build_missing_column_fixer(column),
                     )
                 )
             elif "type" in lowered and column:
@@ -279,10 +280,38 @@ class UnifiedValidator(Generic[SchemaT]):
                     AutoFixSuggestion(
                         description=f"Coerce column '{column}' to the expected dtype",
                         column=column,
-                        fixer=lambda frame, col=column: frame.assign(**{col: pd.to_numeric(frame[col], errors="coerce")}),
+                        fixer=self._build_type_coercion_fixer(column),
                     )
                 )
         return suggestions
+
+    def _infer_column(self, error: ValidationErrorDetail) -> str | None:
+        if error.column is not None:
+            return error.column
+        if isinstance(error.context, Mapping):
+            column_value = error.context.get("column")
+            if isinstance(column_value, str):
+                return column_value
+        match = re.search(r"['\"](?P<col>[A-Za-z0-9_]+)['\"]", error.message)
+        if match:
+            return match.group("col")
+        return None
+
+    def _build_missing_column_fixer(self, column: str) -> FixCallable:
+        def fixer(frame: pd.DataFrame, *, col: str = column) -> pd.DataFrame:
+            if col not in frame:
+                frame[col] = pd.NA
+            return frame
+
+        return fixer
+
+    def _build_type_coercion_fixer(self, column: str) -> FixCallable:
+        def fixer(frame: pd.DataFrame, *, col: str = column) -> pd.DataFrame:
+            if col in frame:
+                frame[col] = pd.to_numeric(frame[col], errors="coerce")
+            return frame
+
+        return fixer
 
     def _render_console(self, console: Console, result: ValidationResult) -> None:
         table = Table(title="Validation Result", expand=True)
