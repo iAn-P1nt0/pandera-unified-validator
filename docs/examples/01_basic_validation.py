@@ -1,11 +1,11 @@
 """
 Example 1: Basic Data Validation
 
-Learn the fundamentals of data-guardian validation with a simple user dataset.
+Learn the fundamentals of pandera-unified-validator validation with a simple user dataset.
 """
 
 import pandas as pd
-from data_guardian import SchemaBuilder, UnifiedValidator, ValidationReporter
+from pandera_unified_validator import SchemaBuilder, UnifiedValidator, ValidationReporter
 
 
 def main():
