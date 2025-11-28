@@ -220,7 +220,7 @@ If you use pandera-unified-validator in your research or production systems, ple
 @software{pandera_unified_validator,
   title = {pandera-unified-validator: Advanced data validation library},
   author = {Ian Pinto},
-  year = {2024},
+  year = {2025},
   url = {https://github.com/ianpinto/pandera-unified-validator}
 }
 ```
