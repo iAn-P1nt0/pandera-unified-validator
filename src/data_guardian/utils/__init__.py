@@ -1,5 +1,5 @@
 """Utility helpers for reporting and shared infrastructure."""
 
-from .reporting import ValidationReport
+from .reporting import MetricsExporter, ValidationReport, ValidationReporter
 
-__all__ = ["ValidationReport"]
+__all__ = ["ValidationReport", "ValidationReporter", "MetricsExporter"]

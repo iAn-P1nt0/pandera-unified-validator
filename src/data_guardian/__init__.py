@@ -31,6 +31,11 @@ from .profiling import (
     QualityScore,
     infer_constraints_from_profile,
 )
+from .utils.reporting import (
+    MetricsExporter,
+    ValidationReport,
+    ValidationReporter,
+)
 
 __all__ = [
     "AutoFixSuggestion",
@@ -52,6 +57,9 @@ __all__ = [
     "ValidationSchema",
     "ValidationErrorDetail",
     "ValidationResult",
+    "ValidationReport",
+    "ValidationReporter",
+    "MetricsExporter",
     "QualityScore",
     "infer_constraints_from_profile",
     "validate_csv_streaming",

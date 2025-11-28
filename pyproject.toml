@@ -18,6 +18,7 @@ dependencies = [
   "pandas>=2.0",
   "polars>=0.20",
   "rich>=13.0",
+  "jinja2>=3.1",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -41,6 +42,8 @@ Documentation = "https://github.com/ianpinto/data-guardian/tree/main/docs"
 dev = [
   "pytest>=7.4",
   "pytest-asyncio>=0.21",
+  "pytest-benchmark>=4.0",
+  "hypothesis>=6.92",
   "mypy>=1.7",
   "ruff>=0.1.6",
   "black>=23.11",
@@ -117,3 +120,4 @@ branch = true
 show_missing = true
 skip_covered = true
 precision = 2
+fail_under = 90.0
